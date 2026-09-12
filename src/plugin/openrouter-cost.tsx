@@ -5,6 +5,27 @@ import { readFile } from "fs/promises"
 import { homedir } from "os"
 import { join } from "path"
 
+type Lang = "en" | "pt"
+
+const LABELS = {
+  en: {
+    session: "Session",
+    balance: "Balance",
+    notConfigured: "not configured",
+    loading: "…",
+  },
+  pt: {
+    session: "Sessão",
+    balance: "Saldo",
+    notConfigured: "não configurado",
+    loading: "…",
+  },
+} as const
+
+function t(lang: Lang, key: keyof (typeof LABELS)["en"]): string {
+  return LABELS[lang]?.[key] ?? LABELS.en[key]
+}
+
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -26,7 +47,20 @@ async function readKey(): Promise<string | null> {
   }
 }
 
-function View(props: { api: TuiPluginApi; session_id: string; key: string | null }) {
+async function readLang(): Promise<Lang> {
+  try {
+    const configPath = join(homedir(), ".config", "opencode", "openrouter-cost.json")
+    const raw = await readFile(configPath, "utf-8")
+    const config = JSON.parse(raw)
+    if (config?.lang === "pt") return "pt"
+    if (config?.lang === "en") return "en"
+    return "en"
+  } catch {
+    return "en"
+  }
+}
+
+function View(props: { api: TuiPluginApi; session_id: string; key: string | null; lang: Lang }) {
   const theme = () => props.api.theme.current
   const session = () => props.api.state.session.get(props.session_id)
   const sessionCost = () => session()?.cost ?? 0
@@ -85,7 +119,7 @@ function View(props: { api: TuiPluginApi; session_id: string; key: string | null
         <text fg={theme().text}>
           <b>OpenRouter</b>
         </text>
-        <text fg={theme().warning}>não configurado</text>
+        <text fg={theme().warning}>{t(props.lang, "notConfigured")}</text>
       </box>
     )
   }
@@ -95,16 +129,16 @@ function View(props: { api: TuiPluginApi; session_id: string; key: string | null
       <text fg={theme().text}>
         <b>OpenRouter</b>
       </text>
-      <text fg={theme().textMuted}>Sessão: {money.format(sessionCost())}</text>
+      <text fg={theme().textMuted}>{t(props.lang, "session")}: {money.format(sessionCost())}</text>
       <text fg={theme().textMuted}>
-        Saldo: {balance() ?? "…"}
+        {t(props.lang, "balance")}: {balance() ?? t(props.lang, "loading")}
       </text>
     </box>
   )
 }
 
 const tui: TuiPlugin = async (api) => {
-  const key = await readKey()
+  const [key, lang] = await Promise.all([readKey(), readLang()])
   if (!key) {
     console.warn("OpenRouter Cost Plugin: no key found. Configure via /models or set OPENROUTER_API_KEY.")
   }
@@ -113,7 +147,7 @@ const tui: TuiPlugin = async (api) => {
     order: 150,
     slots: {
       sidebar_content(_ctx, props) {
-        return <View api={api} session_id={props.session_id} key={key} />
+        return <View api={api} session_id={props.session_id} key={key} lang={lang} />
       },
     },
   })

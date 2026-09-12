@@ -119,6 +119,82 @@ describe("openrouter-costs installer", () => {
     })
   })
 
+  describe("i18n", () => {
+    let configDir
+
+    beforeEach(() => {
+      configDir = join(tempHome, ".config", "opencode")
+      rmSync(configDir, { recursive: true, force: true })
+      mkdirSync(configDir, { recursive: true })
+    })
+
+    it("writes openrouter-cost.json with lang=en when --lang en", async () => {
+      await runInstaller(["--yes", "--lang", "en"], { HOME: tempHome })
+      const configPath = join(configDir, "openrouter-cost.json")
+      assert.ok(existsSync(configPath), "config file should exist")
+      const config = JSON.parse(readFileSync(configPath, "utf-8"))
+      assert.equal(config.lang, "en")
+    })
+
+    it("writes openrouter-cost.json with lang=pt when --lang pt", async () => {
+      await runInstaller(["--yes", "--lang", "pt"], { HOME: tempHome })
+      const configPath = join(configDir, "openrouter-cost.json")
+      const config = JSON.parse(readFileSync(configPath, "utf-8"))
+      assert.equal(config.lang, "pt")
+    })
+
+    it("--yes without --lang defaults to en on fresh install", async () => {
+      await runInstaller(["--yes"], { HOME: tempHome })
+      const configPath = join(configDir, "openrouter-cost.json")
+      assert.ok(existsSync(configPath), "config file should exist")
+      const config = JSON.parse(readFileSync(configPath, "utf-8"))
+      assert.equal(config.lang, "en")
+    })
+
+    it("--yes without --lang preserves existing config lang", async () => {
+      await runInstaller(["--yes", "--lang", "pt"], { HOME: tempHome })
+      await runInstaller(["--yes"], { HOME: tempHome })
+      const config = JSON.parse(readFileSync(join(configDir, "openrouter-cost.json"), "utf-8"))
+      assert.equal(config.lang, "pt", "should preserve pt from first install")
+    })
+
+    it("invalid --lang falls back to en", async () => {
+      const result = await runInstaller(["--yes", "--lang", "fr"], { HOME: tempHome })
+      const configPath = join(configDir, "openrouter-cost.json")
+      assert.ok(existsSync(configPath), "config file should exist")
+      const config = JSON.parse(readFileSync(configPath, "utf-8"))
+      assert.equal(config.lang, "en")
+      assert.ok(result.stderr.includes("Invalid") || result.stdout.includes("Invalid"))
+    })
+
+    it("--dry-run does not create openrouter-cost.json", async () => {
+      await runInstaller(["--yes", "--lang", "en", "--dry-run"], { HOME: tempHome })
+      assert.ok(!existsSync(join(configDir, "openrouter-cost.json")))
+    })
+
+    it("--remove deletes openrouter-cost.json", async () => {
+      await runInstaller(["--yes", "--lang", "pt"], { HOME: tempHome })
+      assert.ok(existsSync(join(configDir, "openrouter-cost.json")))
+      await runInstaller(["--remove", "--yes"], { HOME: tempHome })
+      assert.ok(!existsSync(join(configDir, "openrouter-cost.json")))
+    })
+
+    it("--remove without config defaults to en", async () => {
+      const result = await runInstaller(["--remove", "--yes"], { HOME: tempHome })
+      assert.ok(result.stdout.includes("Plugin removed"))
+    })
+
+    it("--lang pt produces pt installer output", async () => {
+      const result = await runInstaller(["--yes", "--lang", "pt", "--dry-run"], { HOME: tempHome })
+      assert.ok(result.stdout.includes("instalador para OpenCode"))
+    })
+
+    it("--lang en produces en installer output", async () => {
+      const result = await runInstaller(["--yes", "--lang", "en", "--dry-run"], { HOME: tempHome })
+      assert.ok(result.stdout.includes("installer for OpenCode"))
+    })
+  })
+
   describe("error handling", () => {
     it("exits with error if config dir does not exist", async () => {
       const emptyHome = mkdtempSync(join(tmpdir(), "oc-empty-"))
