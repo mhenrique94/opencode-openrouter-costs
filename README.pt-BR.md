@@ -21,11 +21,7 @@ Todo o output subsequente — instruções do instalador e o próprio widget —
 
 Adiciona um widget compacto no sidebar do OpenCode (acima de "Servidor MCP"):
 
-```
-OpenRouter
-Sessão: $0.0523
-Saldo: $4.21
-```
+![Widget OpenRouter em Português — Sessão e Saldo](img/widget-pt.png)
 
 - **Sessão** — gasto da sessão atual (reseta ao criar nova sessão)
 - **Saldo** — crédito restante da conta OpenRouter
