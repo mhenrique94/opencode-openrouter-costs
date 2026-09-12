@@ -1,0 +1,37 @@
+{
+  "name": "opencode-openrouter-costs",
+  "version": "0.1.0",
+  "description": "OpenCode TUI plugin — sidebar widget showing OpenRouter session cost and account balance",
+  "license": "MIT",
+  "author": "Marcelo (mhenrique94)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mhenrique94/opencode-openrouter-costs.git"
+  },
+  "bin": {
+    "opencode-openrouter-costs": "./bin/openrouter-costs.mjs"
+  },
+  "engines": {
+    "node": ">=18",
+    "opencode": ">=1.18.30"
+  },
+  "files": [
+    "bin/",
+    "src/plugin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "tui",
+    "openrouter",
+    "cost",
+    "balance",
+    "widget",
+    "sidebar"
+  ],
+  "scripts": {
+    "test": "node --test test/**/*.test.mjs"
+  }
+}
