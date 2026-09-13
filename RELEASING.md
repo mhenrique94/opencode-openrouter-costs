@@ -88,9 +88,18 @@ publish packages that don't already exist.
 
 ## Versioning
 
-This project follows semver. The initial release is `0.1.0`. Pre-1.0
-versions can break anything without a major bump. When the plugin is
-stable enough for general use, bump to `1.0.0`.
+Semver (see CONTEXT.md glossary). Bump policy:
+
+- **Patch only via pipeline** — `release.yml` runs `npm version patch --no-git-tag-version`
+  (0.0.1 increment, e.g. 0.1.0 → 0.1.1). This is the only bump the pipeline supports.
+  Merges to `main` do NOT bump the version — auto-bump happens only when you click
+  "Run workflow".
+- **Minor/major** — manual only (`npm version minor|major` locally, then push).
+  Not supported by release.yml.
+- **Tag** — annotated tag in the format `v<semver>` (e.g. `v0.1.1`), consistent with
+  the existing `v0.1.0`.
+- **Pre-1.0** — versions may break anything without a major bump. Bump to `1.0.0` when
+  the plugin is stable for general use.
 
 ---
 
