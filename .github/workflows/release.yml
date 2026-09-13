@@ -30,17 +30,26 @@ jobs:
             echo "::error::Version $NEW already exists on npm. Aborting."
             exit 1
           fi
+          if git ls-remote --exit-code --tags origin "$NEW" >/dev/null 2>&1; then
+            echo "::error::Tag $NEW already exists on origin. Aborting (previous partial run?)."
+            exit 1
+          fi
 
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Commit and tag
+      - name: Commit version bump
         run: |
           git add package.json
           git commit -m "chore: release ${{ steps.version.outputs.new }}"
-          git tag -a "${{ steps.version.outputs.new }}" -m "Release ${{ steps.version.outputs.new }}"
+
+      - name: Rebase onto latest main
+        run: git pull --rebase origin main
+
+      - name: Tag release
+        run: git tag -a "${{ steps.version.outputs.new }}" -m "Release ${{ steps.version.outputs.new }}"
 
       - name: Push commit and tag
         run: |
@@ -50,6 +59,13 @@ jobs:
       - run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify publish
+        run: |
+          npm view "opencode-openrouter-costs@${{ steps.version.outputs.new }}" version || {
+            echo "::error::Publish verification failed. Recovery: pull main and run 'npm publish'."
+            exit 1
+          }
 
       - run: gh release create "${{ steps.version.outputs.new }}" --generate-notes
         env:
