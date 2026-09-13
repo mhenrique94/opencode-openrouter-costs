@@ -1,7 +1,7 @@
 # RELEASING
 
-Manual release playbook for `opencode-openrouter-costs`. Step 1 validated this
-playbook end-to-end. Step 2 (automated CI) is documented in the "Future: CI"
+Manual release playbook for `opencode-openrouter-costs`. Step 1 validated
+end-to-end with v0.1.0. CI automation is documented in the "Future: CI"
 section at the end of this file.
 
 ---
@@ -34,10 +34,10 @@ npm install -g ./opencode-openrouter-costs-*.tgz --prefix "$tmpdir"
 ```
 
 Verify the dry-run output shows:
-- Plugin file copied
+- Plugin file copied (or "Copiaria" in dry-run)
 - `tui.json` updated
 - Dependencies ensured
-- `openrouter-cost.json` written
+- Success message ("Plugin installed!")
 
 If any check fails, do not publish. Fix the issue, bump the version, and
 repeat from Step 1.
@@ -54,11 +54,14 @@ This uploads `opencode-openrouter-costs@<version>` to the registry.
 
 ```sh
 tmpdir=$(mktemp -d)
-npx opencode-openrouter-costs@latest --yes --dry-run --prefix "$tmpdir"
+npm install -g opencode-openrouter-costs@<version> --prefix "$tmpdir"
+"$tmpdir/bin/opencode-openrouter-costs" --yes --dry-run
 ```
 
-The output should be identical to the tarball smoke test. This is the
-proof that "From npm" works as the README promises.
+Note: `npx` may not resolve the binary correctly right after publish.
+Use `npm install -g` + direct invocation instead. The output should be
+identical to the tarball smoke test. This is the proof that "From npm"
+works as the README promises.
 
 ## Step 5 — Tag and release
 
@@ -75,9 +78,16 @@ Release notes should include:
 
 ## Step 6 — Rotate credentials
 
-The npm token used for this release should be **revoked and replaced**
-if it was ever exposed (e.g. pasted in a chat session, stored in CI
-logs, or committed to the repo).
+**Always rotate after a release.** The token used for publish should be
+revoked and replaced. Steps:
+
+1. Go to https://npmjs.com/settings/tokens
+2. Revoke the token used for this release
+3. Create a new **"Publish"** type token with Read & Write access
+4. Update `NPM_TOKEN` in GitHub Actions secrets: `gh secret set NPM_TOKEN --body "<new-token>"`
+
+Do not use "Automation" type tokens — they are staging-only and cannot
+publish packages that don't already exist.
 
 ---
 
@@ -89,7 +99,7 @@ stable enough for general use, bump to `1.0.0`.
 
 ---
 
-## Future: CI (Step 2 — to be implemented after Step 1 is validated)
+## Future: CI (to be implemented)
 
 The goal is a GitHub Actions workflow that:
 1. Triggers on `v*` tag push.
@@ -103,14 +113,16 @@ The goal is a GitHub Actions workflow that:
 
 | Secret | Purpose |
 |---|---|
-| `NPM_TOKEN` | npm token with publish scope on `opencode-openrouter-costs`. Created via `npm token create --type=automation` (does not require 2FA at publish time). |
+| `NPM_TOKEN` | npm token with publish scope on `opencode-openrouter-costs`. Created as a **"Publish"** type token at https://npmjs.com/settings/tokens (bypasses 2FA for publish). Do NOT use "Automation" tokens — they are staging-only. |
 
 ### Security constraints
 
 - **2FA**: The npm account `mhenrique94` must have 2FA enabled. Automation
   tokens bypass 2FA for publish but the account itself must be protected.
-- **Token scope**: The `NPM_TOKEN` should be created as an *automation*
-  token (not a legacy token) to avoid 2FA prompts during CI publish.
+- **Token scope**: The `NPM_TOKEN` should be created as a **"Publish"**
+  type token at https://npmjs.com/settings/tokens with Read & Write
+  access. "Automation" tokens are staging-only and will fail with
+  `E_STAGE_REQUIRED` on new packages.
 - **Provenance**: `npm publish --provenance` generates an SLSA provenance
   attestation linking the published package to the exact Git commit and
   build. This is a free supply-chain hardening step.
