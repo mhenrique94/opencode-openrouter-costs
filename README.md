@@ -7,11 +7,11 @@ OpenCode TUI plugin — sidebar widget showing OpenRouter session cost and accou
 ## Install
 
 ```sh
-# From GitHub (no npm publish needed)
-npx github:mhenrique94/opencode-openrouter-costs
-
-# From npm (after publish)
+# From npm (recommended)
 npx opencode-openrouter-costs
+
+# From source (GitHub)
+npx github:mhenrique94/opencode-openrouter-costs
 ```
 
 The installer asks for your preferred language (English or Portuguese) on first run.
@@ -38,7 +38,7 @@ Balance: $4.21
 ## Uninstall
 
 ```sh
-npx github:mhenrique94/opencode-openrouter-costs --remove
+npx opencode-openrouter-costs --remove
 ```
 
 ## Language

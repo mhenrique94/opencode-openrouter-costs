@@ -7,11 +7,11 @@ Plugin TUI para OpenCode — widget no painel lateral mostrando gasto da sessão
 ## Instalar
 
 ```sh
-# Do GitHub (sem precisar publicar no npm)
-npx github:mhenrique94/opencode-openrouter-costs
-
-# Do npm (após publish)
+# Do npm (recomendado)
 npx opencode-openrouter-costs
+
+# Do código-fonte (GitHub)
+npx github:mhenrique94/opencode-openrouter-costs
 ```
 
 O instalador pergunta o idioma preferido (Inglês ou Português) na primeira execução.
@@ -34,7 +34,7 @@ Adiciona um widget compacto no sidebar do OpenCode (acima de "Servidor MCP"):
 ## Desinstalar
 
 ```sh
-npx github:mhenrique94/opencode-openrouter-costs --remove
+npx opencode-openrouter-costs --remove
 ```
 
 ## Idioma
