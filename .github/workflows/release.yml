@@ -1,0 +1,89 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão semver a publicar, ex.: 0.2.0"
+        required: true
+        type: string
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm test
+
+      - run: npm pack --dry-run
+
+      - name: Set version
+        id: version
+        run: |
+          npm version "${{ inputs.version }}" --no-git-tag-version
+          echo "new=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check registry for duplicate
+        run: |
+          if npm view "opencode-openrouter-costs@${{ steps.version.outputs.new }}" version 2>/dev/null; then
+            echo "::error::Version ${{ steps.version.outputs.new }} already exists on npm. Aborting."
+            exit 1
+          fi
+
+      - name: Check tag for duplicate
+        run: |
+          if git ls-remote --exit-code --tags origin "v${{ steps.version.outputs.new }}" >/dev/null 2>&1; then
+            echo "::error::Tag v${{ steps.version.outputs.new }} already exists on origin. Aborting (previous partial run?)."
+            exit 1
+          fi
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit version bump
+        run: |
+          git add package.json
+          git commit -m "chore: release v${{ steps.version.outputs.new }}"
+
+      - name: Tag release
+        run: git tag -a "v${{ steps.version.outputs.new }}" -m "Release v${{ steps.version.outputs.new }}"
+
+      - name: Push commit and tag
+        run: |
+          git push origin main
+          git push origin "v${{ steps.version.outputs.new }}"
+
+      - run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify publish
+        run: |
+          npm view "opencode-openrouter-costs@${{ steps.version.outputs.new }}" version || {
+            echo "::error::Publish verification failed. Recovery: pull main and run 'npm publish'."
+            exit 1
+          }
+
+      - name: Smoke test from registry
+        run: |
+          TMPDIR_RELEASE=$(mktemp -d)
+          npm install -g "opencode-openrouter-costs@${{ steps.version.outputs.new }}" --prefix "$TMPDIR_RELEASE"
+          "$TMPDIR_RELEASE/bin/opencode-openrouter-costs" --yes --dry-run
+
+      - run: gh release create "v${{ steps.version.outputs.new }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

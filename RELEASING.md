@@ -1,159 +1,120 @@
 # RELEASING
 
-Manual release playbook for `opencode-openrouter-costs`. Step 1 validated
-end-to-end with v0.1.0. CI automation is documented in the "Future: CI"
-section at the end of this file.
+Playbook operativo de release para `opencode-openrouter-costs`.
 
 ---
 
-## Prerequisites
+## Como funciona
 
-- `npm login` completed (username: `mhenrique94`).
-- `gh` CLI authenticated.
-- Tests pass: `node --test test/**/*.test.mjs`.
-- Working tree clean on `main`.
+Todo merge de PR para `main` roda os testes no CI. Para fazer um release:
 
-## Step 1 — Pre-flight
+1. Clique em **"Run workflow"** no [Release workflow](https://github.com/mhenrique94/opencode-openrouter-costs/actions/workflows/release.yml).
+2. Selecione a branch `main`, escreva a versão semver (ex.: `0.2.0`) e clique no botão verde.
+
+Pronto.
+
+### O que o pipeline faz (release.yml)
+
+1. Roda `npm test` (guardrail).
+2. Roda `npm pack --dry-run` (informativo — lista os arquivos do tarball).
+3. Escreve a versão no `package.json` via `npm version "<ver>" --no-git-tag-version`.
+4. Verifica o registry — aborta se a versão já existir.
+5. Verifica tags — aborta se a tag `v<ver>` já existir (run parcial anterior).
+6. Commits o bump + cria tag anotada como `github-actions[bot]`.
+7. Push de commit + tag para `main`.
+8. Publica no npm com `--provenance` (attestação SLSA).
+9. Verifica a publicação no registry.
+10. Smoke test: instala o pacote do registry real e executa o binário.
+11. Cria o GitHub Release com notas geradas automaticamente.
+
+### O que o pipeline NÃO faz
+
+- **Não** bumpa `main` automaticamente a cada merge (o bump só acontece ao clicar "Run workflow").
+- **Não** usa auto-bump — a versão é definida manualmente pelo mantenedor.
+- **Não** rotaciona o token npm.
+
+---
+
+## Pré-requisitos
+
+- `NPM_TOKEN` configurado nos GitHub Actions secrets (token do tipo "Publish" com acesso Read & Write; bypassa 2FA para publish). NÃO usar tokens "Automation" — são apenas para staging e não publicam pacotes novos.
+- `gh` CLI autenticado (para debug local; não é necessário para o pipeline).
+
+---
+
+## Passos do mantenedor
+
+### 1. Merge o PR para `main`
+
+Os testes rodam via `ci.yml`. O merge é irrestrito (sem branch protection).
+
+### 2. Clique em "Run workflow"
+
+Acesse https://github.com/mhenrique94/opencode-openrouter-costs/actions/workflows/release.yml → clique em **"Run workflow"** → selecione `main` → escreva a versão (ex.: `0.2.0`) → clique no botão verde.
+
+### 3. Verificar
+
+- **npm**: `npm view opencode-openrouter-costs@<ver> version` retorna a versão publicada.
+- **GitHub Release**: `gh release list` mostra o novo release.
+- **Smoke test manual** (opcional — o pipeline já executa o smoke test internamente):
+  ```sh
+  tmpdir=$(mktemp -d)
+  npm install -g opencode-openrouter-costs@<ver> --prefix "$tmpdir"
+  "$tmpdir/bin/opencode-openrouter-costs" --yes --dry-run
+  ```
+
+---
+
+## Fallback manual
+
+Se o pipeline estiver fora (GitHub Actions indisponível), você pode publicar manualmente:
 
 ```sh
+npm test
 npm pack --dry-run
+npm version <ver> --no-git-tag-version
+git add package.json
+git commit -m "chore: release v<ver>"
+git tag -a "v<ver>" -m "Release v<ver>"
+git push origin main --follow-tags
+npm publish --provenance
+gh release create v<ver> --generate-notes
 ```
 
-Confirm the tarball includes exactly 6 files:
-`bin/openrouter-costs.mjs`, `src/plugin/openrouter-cost.tsx`,
-`README.md`, `README.pt-BR.md`, `LICENSE`, `package.json`.
-
-## Step 2 — Smoke test: tarball
-
-```sh
-npm pack
-# Install into a temporary HOME
-tmpdir=$(mktemp -d)
-npm install -g ./opencode-openrouter-costs-*.tgz --prefix "$tmpdir"
-"$tmpdir/bin/opencode-openrouter-costs" --yes --dry-run
-```
-
-Verify the dry-run output shows:
-- Plugin file copied (or "Copiaria" in dry-run)
-- `tui.json` updated
-- Dependencies ensured
-- Success message ("Plugin installed!")
-
-If any check fails, do not publish. Fix the issue, bump the version, and
-repeat from Step 1.
-
-## Step 3 — Publish
-
-```sh
-npm publish
-```
-
-This uploads `opencode-openrouter-costs@<version>` to the registry.
-
-## Step 4 — Smoke test: registry
-
-```sh
-tmpdir=$(mktemp -d)
-npm install -g opencode-openrouter-costs@<version> --prefix "$tmpdir"
-"$tmpdir/bin/opencode-openrouter-costs" --yes --dry-run
-```
-
-Note: `npx` may not resolve the binary correctly right after publish.
-Use `npm install -g` + direct invocation instead. The output should be
-identical to the tarball smoke test. This is the proof that "From npm"
-works as the README promises.
-
-## Step 5 — Tag and release
-
-```sh
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."
-```
-
-Release notes should include:
-- What the plugin does
-- `npx opencode-openrouter-costs` command
-- Link to npm page: `https://www.npmjs.com/package/opencode-openrouter-costs`
-
-## Step 6 — Rotate credentials
-
-**Always rotate after a release.** The token used for publish should be
-revoked and replaced. Steps:
-
-1. Go to https://npmjs.com/settings/tokens
-2. Revoke the token used for this release
-3. Create a new **"Publish"** type token with Read & Write access
-4. Update `NPM_TOKEN` in GitHub Actions secrets: `gh secret set NPM_TOKEN --body "<new-token>"`
-
-Do not use "Automation" type tokens — they are staging-only and cannot
-publish packages that don't already exist.
+O resultado deve ser idêntico ao pipeline: mesmo tag `v<ver>`, mesmo commit em `main`.
 
 ---
 
-## Versioning
+## Recuperação de falhas
 
-This project follows semver. The initial release is `0.1.0`. Pre-1.0
-versions can break anything without a major bump. When the plugin is
-stable enough for general use, bump to `1.0.0`.
+| Falhou em | Estado resultante | Recuperação |
+|---|---|---|
+| Push (passo 11) rejeitado | Nada publicado, nada pushado | Re-executar o workflow (seguro; o preflight não bloqueia porque não ficou tag). |
+| Publish (passo 12) falhou | Commit de bump + tag **já em `main`**, registry sem a versão | **Importante**: re-execução direta **será bloqueada** no preflight da tag (passo 7). Recuperação: (a) deletar o tag remoto `git push origin :refs/tags/v<ver>` e re-executar; ou (b) publish manual: `git pull && npm publish`. |
+| Smoke test (passo 14) falhou | Versão publicada, **sem** GitHub Release | Diagnosticar o falha do binário instalado; re-execução **não é viável** (a versão já existe). Criar o GitHub Release manualmente após correção, ou versionar novamente. |
+| `gh release create` (passo 15) falhou | Tudo publicado, sem release no GitHub | `gh release create v<ver> --generate-notes` manual. |
 
 ---
 
-## Future: CI (to be implemented)
+## Política de versionamento
 
-The goal is a GitHub Actions workflow that:
-1. Triggers on `v*` tag push.
-2. Checks out `main` at the tag commit.
-3. Runs `npm test`.
-4. Runs `npm pack --dry-run` (content verification).
-5. Publishes to npm with `--provenance` (supply-chain attestation).
-6. Creates a GitHub Release with auto-generated notes.
+Semver: patch/minor/major livre via o campo de input do workflow.
 
-### Secrets required (GitHub repo Settings → Secrets → Actions)
+- **Bump via pipeline** — a versão é definida pelo mantenedor no campo "Run workflow". Merges a `main` NÃO fazem bump — o bump só ocorre ao disparar o workflow.
+- **Tag** — tag anotada no formato `v<semver>` (ex.: `v0.2.0`), consistente com os releases anteriores.
+- **Pré-1.0** — versões podem quebrar qualquer coisa sem bump de major. Subir para `1.0.0` quando o plugin estiver estável para uso geral.
 
-| Secret | Purpose |
-|---|---|
-| `NPM_TOKEN` | npm token with publish scope on `opencode-openrouter-costs`. Created as a **"Publish"** type token at https://npmjs.com/settings/tokens (bypasses 2FA for publish). Do NOT use "Automation" tokens — they are staging-only. |
+---
 
-### Security constraints
+## Único proprietário de `main`
 
-- **2FA**: The npm account `mhenrique94` must have 2FA enabled. Automation
-  tokens bypass 2FA for publish but the account itself must be protected.
-- **Token scope**: The `NPM_TOKEN` should be created as a **"Publish"**
-  type token at https://npmjs.com/settings/tokens with Read & Write
-  access. "Automation" tokens are staging-only and will fail with
-  `E_STAGE_REQUIRED` on new packages.
-- **Provenance**: `npm publish --provenance` generates an SLSA provenance
-  attestation linking the published package to the exact Git commit and
-  build. This is a free supply-chain hardening step.
-- **No token in logs**: The workflow must mask the token. GitHub Actions
-  does this by default for secrets, but double-check with `::add-mask::`.
+Ver seção "Carve-out de CI/CD: push para `main`" em `CONTEXT.md` — o
+`release.yml` é o único workflow autorizado a pushar em `main`.
 
-### Draft workflow (reference, not executable)
+---
 
-```yaml
-name: Release
-on:
-  push:
-    tags: ['v*']
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write  # for npm --provenance
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-      - run: npm test
-      - run: npm pack --dry-run
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: gh release create ${{ github.ref_name }} --generate-notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-```
+## CI: testes em pull request (ci.yml)
+
+Todo pull request para `main` roda `npm test` no Node 24. Não há branch
+protection configurada — merges são irrestritos — mas o status do CI fica
+visível no PR para revisão humana.
