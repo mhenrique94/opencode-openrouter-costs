@@ -1,6 +1,11 @@
 name: Release
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão semver a publicar, ex.: 0.2.0"
+        required: true
+        type: string
 permissions:
   contents: write
   id-token: write
@@ -12,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -21,17 +29,23 @@ jobs:
 
       - run: npm pack --dry-run
 
-      - name: Compute new version and check registry
+      - name: Set version
         id: version
         run: |
-          NEW=$(npm version patch --no-git-tag-version)
-          echo "new=$NEW" >> "$GITHUB_OUTPUT"
-          if npm view "opencode-openrouter-costs@$NEW" version 2>/dev/null; then
-            echo "::error::Version $NEW already exists on npm. Aborting."
+          npm version "${{ inputs.version }}" --no-git-tag-version
+          echo "new=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check registry for duplicate
+        run: |
+          if npm view "opencode-openrouter-costs@${{ steps.version.outputs.new }}" version 2>/dev/null; then
+            echo "::error::Version ${{ steps.version.outputs.new }} already exists on npm. Aborting."
             exit 1
           fi
-          if git ls-remote --exit-code --tags origin "$NEW" >/dev/null 2>&1; then
-            echo "::error::Tag $NEW already exists on origin. Aborting (previous partial run?)."
+
+      - name: Check tag for duplicate
+        run: |
+          if git ls-remote --exit-code --tags origin "v${{ steps.version.outputs.new }}" >/dev/null 2>&1; then
+            echo "::error::Tag v${{ steps.version.outputs.new }} already exists on origin. Aborting (previous partial run?)."
             exit 1
           fi
 
@@ -43,18 +57,15 @@ jobs:
       - name: Commit version bump
         run: |
           git add package.json
-          git commit -m "chore: release ${{ steps.version.outputs.new }}"
-
-      - name: Rebase onto latest main
-        run: git pull --rebase origin main
+          git commit -m "chore: release v${{ steps.version.outputs.new }}"
 
       - name: Tag release
-        run: git tag -a "${{ steps.version.outputs.new }}" -m "Release ${{ steps.version.outputs.new }}"
+        run: git tag -a "v${{ steps.version.outputs.new }}" -m "Release v${{ steps.version.outputs.new }}"
 
       - name: Push commit and tag
         run: |
           git push origin main
-          git push origin "${{ steps.version.outputs.new }}"
+          git push origin "v${{ steps.version.outputs.new }}"
 
       - run: npm publish --provenance
         env:
@@ -67,6 +78,12 @@ jobs:
             exit 1
           }
 
-      - run: gh release create "${{ steps.version.outputs.new }}" --generate-notes
+      - name: Smoke test from registry
+        run: |
+          TMPDIR_RELEASE=$(mktemp -d)
+          npm install -g "opencode-openrouter-costs@${{ steps.version.outputs.new }}" --prefix "$TMPDIR_RELEASE"
+          "$TMPDIR_RELEASE/bin/opencode-openrouter-costs" --yes --dry-run
+
+      - run: gh release create "v${{ steps.version.outputs.new }}" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
