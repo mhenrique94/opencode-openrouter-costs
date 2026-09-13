@@ -1,0 +1,56 @@
+name: Release
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm test
+
+      - run: npm pack --dry-run
+
+      - name: Compute new version and check registry
+        id: version
+        run: |
+          NEW=$(npm version patch --no-git-tag-version)
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          if npm view "opencode-openrouter-costs@$NEW" version 2>/dev/null; then
+            echo "::error::Version $NEW already exists on npm. Aborting."
+            exit 1
+          fi
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and tag
+        run: |
+          git add package.json
+          git commit -m "chore: release ${{ steps.version.outputs.new }}"
+          git tag -a "${{ steps.version.outputs.new }}" -m "Release ${{ steps.version.outputs.new }}"
+
+      - name: Push commit and tag
+        run: |
+          git push origin main
+          git push origin "${{ steps.version.outputs.new }}"
+
+      - run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: gh release create "${{ steps.version.outputs.new }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

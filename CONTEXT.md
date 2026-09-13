@@ -12,15 +12,23 @@
 
 - **npm package** — the distribution unit published to the registry as `opencode-openrouter-costs@<version>`. Contains `bin/`, `src/plugin/`, READMEs, and LICENSE.
 
-- **publish** — uploading a tagged version to the npm registry.
+- **publish** — uploading a version to the npm registry. Happens via `release.yml` (workflow_dispatch) or manually as a fallback.
 
-- **release** — publish + git tag `v<semver>` + GitHub Release page.
+- **release** — the full cycle: bump version → tag → publish to npm → create GitHub Release page. Triggered by clicking "Run workflow" on `release.yml`.
+
+- **ci.yml** — GitHub Actions workflow that runs `npm test` on every PR to `main`. Node 24.
+
+- **release.yml** — GitHub Actions workflow triggered manually ("Run workflow" button). Bumps patch version (0.0.1), creates annotated tag, publishes to npm with `--provenance`, creates GitHub Release with auto-generated notes. Identity: `github-actions[bot]`. Serialized via concurrency group (`release`).
+
+- **auto-bump (on release)** — version increment happens only when you click "Run workflow" on `release.yml`. Merges to `main` do NOT bump the version. Patch-only (0.0.1).
+
+- **NPM_TOKEN** — GitHub Actions secret. npm token with "Publish" type (Read & Write access, bypasses 2FA for publish). Do NOT use "Automation" tokens — they are staging-only (`E_STAGE_REQUIRED`).
 
 - **npm install** — `npx opencode-openrouter-costs` (the primary path).
 
 - **source install** (GitHub) — `npx github:mhenrique94/opencode-openrouter-costs` (fallback for developers installing from the repo directly).
 
-- **smoke test** — pre-publish validation (install the packed tarball into a temporary HOME) and post-publish validation (`npx opencode-openrouter-costs@<version>` from the real registry).
+- **smoke test** — (1) pre-publish: `npm pack --dry-run` verifying 6 files, run by `release.yml` automatically. (2) post-publish: `npm install -g opencode-openrouter-costs@<version> && <tmpdir>/bin/opencode-openrouter-costs --yes --dry-run`, run manually to verify the registry works.
 
 - **installed language** — `en` or `pt`, persisted in `~/.config/opencode/openrouter-cost.json`.
 
@@ -35,3 +43,13 @@ When no key is found, the widget renders "not configured".
 ## Scope
 
 This repository contains a single OpenCode plugin that adds an OpenRouter cost/balance widget to the sidebar. It is not a general-purpose plugin framework — the scope is narrow and intentionally so.
+
+## CI/CD carve-out: push to `main`
+
+The project rule "NEVER commit or push directly to `main`" applies to
+human agents and autonomous agents. **Exception**: the `release.yml`
+workflow — and only that workflow — pushes a version-bump commit and
+tag to `main` as part of the release process. This is the only
+automated push to `main` in the project. The commit is authored by
+`github-actions[bot]` and always contains only a `package.json` version
+change.
