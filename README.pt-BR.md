@@ -49,6 +49,10 @@ instalador novamente ou edite o arquivo de config diretamente:
 
 Valores válidos: `"en"` ou `"pt"`.
 
+## Contribuição / Release
+
+Veja [RELEASING.md](./RELEASING.md) para o fluxo de release e playbook de manutenção.
+
 ## Licença
 
 MIT
