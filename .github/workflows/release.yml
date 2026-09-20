@@ -25,6 +25,13 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      - name: Get current version
+        id: current_version
+        run: |
+          VERSION=$(npm view opencode-openrouter-costs version 2>/dev/null || echo "unknown")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "📋 Current published version: ${VERSION}"
+
       - run: npm test
 
       - run: npm pack --dry-run
@@ -73,10 +80,17 @@ jobs:
 
       - name: Verify publish
         run: |
-          npm view "opencode-openrouter-costs@${{ steps.version.outputs.new }}" version || {
-            echo "::error::Publish verification failed. Recovery: pull main and run 'npm publish'."
-            exit 1
-          }
+          NEW_VERSION="${{ steps.version.outputs.new }}"
+          for i in 1 2 3 4 5; do
+            if npm view "opencode-openrouter-costs@${NEW_VERSION}" version 2>/dev/null; then
+              echo "✅ Publish verified successfully."
+              exit 0
+            fi
+            echo "⏳ Attempt $i: package not yet available. Waiting 30s..."
+            sleep 30
+          done
+          echo "::error::Publish verification failed after 5 retries. The package may not have been published."
+          exit 1
 
       - name: Smoke test from registry
         run: |
