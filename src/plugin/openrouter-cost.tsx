@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
+import type { AssistantMessage } from "@opencode-ai/sdk/v2"
 import { createSignal, onCleanup } from "solid-js"
 import { readFile } from "fs/promises"
 import { homedir } from "os"
@@ -13,12 +14,14 @@ const LABELS = {
     balance: "Balance",
     notConfigured: "not configured",
     loading: "…",
+    noSessionCost: "No session usage",
   },
   pt: {
     session: "Sessão",
     balance: "Saldo",
     notConfigured: "não configurado",
     loading: "…",
+    noSessionCost: "Sem uso na sessão",
   },
 } as const
 
@@ -30,6 +33,8 @@ const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 })
+
+const OPENROUTER_PROVIDER_ID = "openrouter"
 
 const DEFAULT_TTL_MS = 60_000
 
@@ -62,8 +67,15 @@ async function readLang(): Promise<Lang> {
 
 function View(props: { api: TuiPluginApi; session_id: string; key: string | null; lang: Lang }) {
   const theme = () => props.api.theme.current
-  const session = () => props.api.state.session.get(props.session_id)
-  const sessionCost = () => session()?.cost ?? 0
+
+  const openrouterSessionCost = () => {
+    const msgs = props.api.state.session.messages(props.session_id)
+    return msgs
+      .filter((m): m is AssistantMessage => m.role === "assistant" && m.providerID === OPENROUTER_PROVIDER_ID)
+      .reduce((sum, m) => sum + (m.cost ?? 0), 0)
+  }
+
+  const hasOpenRouterUsage = () => openrouterSessionCost() > 0
 
   const [balance, setBalance] = createSignal<string | null>(null)
   let lastFetch = 0
@@ -129,7 +141,12 @@ function View(props: { api: TuiPluginApi; session_id: string; key: string | null
       <text fg={theme().text}>
         <b>OpenRouter</b>
       </text>
-      <text fg={theme().textMuted}>{t(props.lang, "session")}: {money.format(sessionCost())}</text>
+      {!hasOpenRouterUsage() && (
+        <text fg={theme().textMuted}>{t(props.lang, "noSessionCost")}</text>
+      )}
+      {hasOpenRouterUsage() && (
+        <text fg={theme().textMuted}>{t(props.lang, "session")}: {money.format(openrouterSessionCost())}</text>
+      )}
       <text fg={theme().textMuted}>
         {t(props.lang, "balance")}: {balance() ?? t(props.lang, "loading")}
       </text>
